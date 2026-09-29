@@ -1,0 +1,12 @@
+N1                  15
+N2                  15
+g11                 0.010000
+g22                 0.010000
+g12                 0.011289
+t                   0.001500
+h                   0.000000
+dt                  0.025000
+num_steps           6250000
+num_walkers         1000
+forward_walk_steps  30000
+time_order          2
