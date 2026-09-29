@@ -20,6 +20,7 @@ function generate_folders(;
     time_order::Int,
     h_values::Vector{Float64},
     g12_values::Vector{Float64},
+    parent_folder::String="",
     estimate::Bool=true,
     method::String="dmc_pure",
     measurement_stride::Int=1_000,
@@ -36,8 +37,10 @@ function generate_folders(;
     count = 0
 
     for h in h_values, g12 in g12_values
-        folder = @sprintf("%s_g%.6f_g12%.6f_h%.6f_t%.6f_fwd%d_N%d", PREFIX, g, g12, h, t, forward_walk_steps, N_total)
+        folder_name = @sprintf("%s_g%.6f_g12%.6f_h%.6f_t%.6f_fwd%d_N%d", PREFIX, g, g12, h, t, forward_walk_steps, N_total)
+        folder = isempty(parent_folder) ? folder_name : joinpath(parent_folder, folder_name)
         mkpath(folder)
+        runner_path = relpath(joinpath(@__DIR__, "run_dmc_cc_forward.jl"), abspath(folder))
 
         if estimate
             # MF estimate of N1, N2 based on polarization P^2 = 1 - (2t/(g12-g))^2
@@ -85,13 +88,13 @@ function generate_folders(;
             println(f, "")
             println(f, "module load modulepath/EESSI/2025.06")
             println(f, "module load Julia/1.12.2")
-            println(f, "julia --project=~ -t \$SLURM_CPUS_PER_TASK ../run_dmc_cc_forward.jl 2>&1 | tee run.log")
+            println(f, "julia --project=~ -t \$SLURM_CPUS_PER_TASK $runner_path 2>&1 | tee run.log")
         end
 
         # Write run_local.sh
         open(joinpath(folder, "run_local.sh"), "w") do f
             println(f, "#!/bin/bash")
-            println(f, "julia -t auto ../run_dmc_cc_forward.jl 2>&1 | tee run.log")
+            println(f, "julia -t auto $runner_path 2>&1 | tee run.log")
         end
 
         println("Created: $folder")
@@ -113,6 +116,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     measurement_stride = 1_000
     equilibration_steps = 50_000
     estimate           = true
+    parent_folder      = ""
     sizes              = [(40,40)]
     g_values           = [10.]
     t_fracs            = [0.15]  # as multiples of g
@@ -133,7 +137,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             total += generate_folders(;
                 g, t, dt, N1, N2,
                 num_steps, num_walkers, forward_walk_steps, time_order,
-                h_values, g12_values, estimate, method, measurement_stride,
+                h_values, g12_values, parent_folder, estimate, method, measurement_stride,
                 equilibration_steps)
         end
     end
