@@ -135,6 +135,17 @@ function run_metropolis(k11::Float64, delta11::Float64,
     E_lap_var = max(0.0, E_lap_var)
     E_lap_err = sqrt(E_lap_var / nmeas)
 
+    mkpath("VMC")
+    open("VMC/results.txt", "w") do f
+        @printf(f, "N1                  %d\n", N1)
+        @printf(f, "N2                  %d\n", N2)
+        @printf(f, "E_VMC               %.15f\n", E_lap_mean)
+        @printf(f, "E_VMC_err           %.6e\n", E_lap_err)
+        @printf(f, "E_VMC_per_particle  %.15f\n", E_lap_mean / N_total)
+        @printf(f, "equilibration_steps %d\n", equilibration_steps)
+        @printf(f, "production_steps    %d\n", production_steps)
+    end
+
     # Normalize and save correlators / structure factors
     Cs_full = zeros(Float64, Nbins_corr)
     for i in 1:Nbins_corr
