@@ -1,4 +1,4 @@
-if !isdefined(@__MODULE__, :run_metropolis)
+if !isdefined(@__MODULE__, :run_metropolis_flips)
     include("vmc.jl")
 end
 
@@ -38,7 +38,7 @@ function run_vmc_from_params(params::Dict{String, String})
     k12, delta12 = compute_k_delta(a12, L)
 
     println("Running VMC only with parameters from params.dat")
-    return run_metropolis(k11, delta11, k22, delta22, k12, delta12, t, h;
+    return run_metropolis_flips(k11, delta11, k22, delta22, k12, delta12, t, h;
         N1, N2, equilibration_steps, verbose=true)
 end
 

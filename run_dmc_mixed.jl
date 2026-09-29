@@ -1,5 +1,5 @@
 include("dmc_cc_mixed.jl")
-if !isdefined(@__MODULE__, :run_metropolis)
+if !isdefined(@__MODULE__, :run_metropolis_flips)
     include("vmc.jl")
 end
 
@@ -45,7 +45,7 @@ function run_dmc_2comp_mixed(N1::Int, N2::Int, g11::Float64, g22::Float64, g12::
             println("t = ", t)
             println("h = ", h)
         end
-        E_T_init, _ = run_metropolis(k11, delta11, k22, delta22, k12, delta12, t, h;
+        E_T_init, _, _ = run_metropolis_flips(k11, delta11, k22, delta22, k12, delta12, t, h;
             N1=N1, N2=N2, equilibration_steps=equilibration_steps, verbose=verbose)
     elseif E_T_init === nothing
         error("E_T_init not provided and compute_E_T is false. Please provide E_T_init or set compute_E_T=true")
