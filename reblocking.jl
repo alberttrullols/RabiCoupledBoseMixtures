@@ -23,6 +23,13 @@ function run_reblocking_loop(data::Vector{Float64}, min_stop_blocks::Int, platea
         block_size = 2^i
         n_blocks = div(n_total, block_size)
     end
+
+    if isempty(errors)
+        fallback_error = n_total > 1 ? std(data) / sqrt(n_total) : NaN
+        @warn "Not enough samples for reblocking; using the independent-sample error estimate" label n_total min_stop_blocks
+        push!(block_sizes, 1)
+        push!(errors, fallback_error)
+    end
     
     # Calculate differences between consecutive errors
     diffs = zeros(Float64, length(errors) - 1)
