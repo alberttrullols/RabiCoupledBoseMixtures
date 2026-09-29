@@ -21,6 +21,7 @@ function generate_folders(;
     h_values::Vector{Float64},
     g12_values::Vector{Float64},
     parent_folder::String="",
+    acum_mixed::Bool=true,
     estimate::Bool=true,
     method::String="dmc_pure",
     measurement_stride::Int=1_000,
@@ -59,6 +60,7 @@ function generate_folders(;
             println(f, "N2                  $N2_use")
             println(f, "method              $method")
             println(f, "measurement_stride  $measurement_stride")
+            println(f, "acum_mixed         $acum_mixed")
             println(f, "equilibration_steps $equilibration_steps")
             @printf(f,  "g11                 %.6f\n", g)
             @printf(f,  "g22                 %.6f\n", g)
@@ -117,6 +119,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     equilibration_steps = 50_000
     estimate           = true
     parent_folder      = ""
+    acum_mixed         = true
     sizes              = [(40,40)]
     g_values           = [10.]
     t_fracs            = [0.15]  # as multiples of g
@@ -137,7 +140,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             total += generate_folders(;
                 g, t, dt, N1, N2,
                 num_steps, num_walkers, forward_walk_steps, time_order,
-                h_values, g12_values, parent_folder, estimate, method, measurement_stride,
+                h_values, g12_values, parent_folder, acum_mixed, estimate, method, measurement_stride,
                 equilibration_steps)
         end
     end

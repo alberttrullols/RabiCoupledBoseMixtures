@@ -59,6 +59,7 @@ function DMC_pure_pc_overlapping(num_steps::Int, num_walkers::Int, dt::Float64, 
     use_full_flip_expression::Bool=false,
     forward_walk_steps::Int=100,
     measurement_stride::Int=1_000,
+    acum_mixed::Bool=true,
     equilibration_steps::Int=0,
 )
     forward_walk_steps > 0 || throw(ArgumentError("forward_walk_steps must be positive"))
@@ -497,25 +498,27 @@ function DMC_pure_pc_overlapping(num_steps::Int, num_walkers::Int, dt::Float64, 
         energies[step]         = E_mean
         energies_squared[step] = E_mean^2
 
-        P_mixed_sum = 0.0
-        P2_mixed_sum = 0.0
-        P4_mixed_sum = 0.0
-        P_abs_mixed_sum = 0.0
-        @inbounds for w in 1:num_walkers
-            n1 = 0
-            for i in 1:N_total
-                n1 += (ws.walker_spin[w, i] == 1.0)
+        if acum_mixed
+            P_mixed_sum = 0.0
+            P2_mixed_sum = 0.0
+            P4_mixed_sum = 0.0
+            P_abs_mixed_sum = 0.0
+            @inbounds for w in 1:num_walkers
+                n1 = 0
+                for i in 1:N_total
+                    n1 += (ws.walker_spin[w, i] == 1.0)
+                end
+                P_w = (2*n1 - N_total) / N_total
+                P_mixed_sum += P_w
+                P2_mixed_sum += P_w^2
+                P4_mixed_sum += P_w^4
+                P_abs_mixed_sum += abs(P_w)
             end
-            P_w = (2*n1 - N_total) / N_total
-            P_mixed_sum += P_w
-            P2_mixed_sum += P_w^2
-            P4_mixed_sum += P_w^4
-            P_abs_mixed_sum += abs(P_w)
+            polarizations_P_mixed[step] = P_mixed_sum / num_walkers
+            polarizations_P2_mixed[step] = P2_mixed_sum / num_walkers
+            polarizations_P4_mixed[step] = P4_mixed_sum / num_walkers
+            polarizations_P_abs_mixed[step] = P_abs_mixed_sum / num_walkers
         end
-        polarizations_P_mixed[step] = P_mixed_sum / num_walkers
-        polarizations_P2_mixed[step] = P2_mixed_sum / num_walkers
-        polarizations_P4_mixed[step] = P4_mixed_sum / num_walkers
-        polarizations_P_abs_mixed[step] = P_abs_mixed_sum / num_walkers
 
         ################################################################ population control
         if branching
@@ -552,10 +555,17 @@ function DMC_pure_pc_overlapping(num_steps::Int, num_walkers::Int, dt::Float64, 
     start_idx = equilibration_steps + 1
     energy_avg         = mean(energies[start_idx:end])
     energy_squared_avg = mean(energies_squared[start_idx:end])
-    P_avg_mixed = mean(polarizations_P_mixed[start_idx:end])
-    P2_avg_mixed = mean(polarizations_P2_mixed[start_idx:end])
-    P4_avg_mixed = mean(polarizations_P4_mixed[start_idx:end])
-    P_abs_avg_mixed = mean(polarizations_P_abs_mixed[start_idx:end])
+    if acum_mixed
+        P_avg_mixed = mean(polarizations_P_mixed[start_idx:end])
+        P2_avg_mixed = mean(polarizations_P2_mixed[start_idx:end])
+        P4_avg_mixed = mean(polarizations_P4_mixed[start_idx:end])
+        P_abs_avg_mixed = mean(polarizations_P_abs_mixed[start_idx:end])
+    else
+        P_avg_mixed = NaN
+        P2_avg_mixed = NaN
+        P4_avg_mixed = NaN
+        P_abs_avg_mixed = NaN
+    end
 
     #################################################################### saving output files
 
@@ -591,27 +601,35 @@ function DMC_pure_pc_overlapping(num_steps::Int, num_walkers::Int, dt::Float64, 
     end
 
     open("P_mixed_stream.txt", "w") do f
-        println(f, "# step  <P>_mixed")
-        for i in start_idx:num_steps
-            println(f, i, " ", polarizations_P_mixed[i])
+        println(f, acum_mixed ? "# step  <P>_mixed" : "# not accumulated (acum_mixed=false)")
+        if acum_mixed
+            for i in start_idx:num_steps
+                println(f, i, " ", polarizations_P_mixed[i])
+            end
         end
     end
     open("P2_mixed_stream.txt", "w") do f
-        println(f, "# step  <P^2>_mixed")
-        for i in start_idx:num_steps
-            println(f, i, " ", polarizations_P2_mixed[i])
+        println(f, acum_mixed ? "# step  <P^2>_mixed" : "# not accumulated (acum_mixed=false)")
+        if acum_mixed
+            for i in start_idx:num_steps
+                println(f, i, " ", polarizations_P2_mixed[i])
+            end
         end
     end
     open("P4_mixed_stream.txt", "w") do f
-        println(f, "# step  <P^4>_mixed")
-        for i in start_idx:num_steps
-            println(f, i, " ", polarizations_P4_mixed[i])
+        println(f, acum_mixed ? "# step  <P^4>_mixed" : "# not accumulated (acum_mixed=false)")
+        if acum_mixed
+            for i in start_idx:num_steps
+                println(f, i, " ", polarizations_P4_mixed[i])
+            end
         end
     end
     open("Pabs_mixed_stream.txt", "w") do f
-        println(f, "# step  <|P|>_mixed")
-        for i in start_idx:num_steps
-            println(f, i, " ", polarizations_P_abs_mixed[i])
+        println(f, acum_mixed ? "# step  <|P|>_mixed" : "# not accumulated (acum_mixed=false)")
+        if acum_mixed
+            for i in start_idx:num_steps
+                println(f, i, " ", polarizations_P_abs_mixed[i])
+            end
         end
     end
 
@@ -645,10 +663,17 @@ function DMC_pure_pc_overlapping(num_steps::Int, num_walkers::Int, dt::Float64, 
 
     if reblocking
         opt_block_size, energy_err, _, _ = run_reblocking_loop(energies[start_idx:end], 40; label="energy")
-        _, P_err_mixed, _, _ = run_reblocking_loop(polarizations_P_mixed[start_idx:end], 40; label="P_mixed")
-        _, P2_err_mixed, _, _ = run_reblocking_loop(polarizations_P2_mixed[start_idx:end], 40; label="P2_mixed")
-        _, P4_err_mixed, _, _ = run_reblocking_loop(polarizations_P4_mixed[start_idx:end], 40; label="P4_mixed")
-        _, P_abs_err_mixed, _, _ = run_reblocking_loop(polarizations_P_abs_mixed[start_idx:end], 40; label="Pabs_mixed")
+        if acum_mixed
+            _, P_err_mixed, _, _ = run_reblocking_loop(polarizations_P_mixed[start_idx:end], 40; label="P_mixed")
+            _, P2_err_mixed, _, _ = run_reblocking_loop(polarizations_P2_mixed[start_idx:end], 40; label="P2_mixed")
+            _, P4_err_mixed, _, _ = run_reblocking_loop(polarizations_P4_mixed[start_idx:end], 40; label="P4_mixed")
+            _, P_abs_err_mixed, _, _ = run_reblocking_loop(polarizations_P_abs_mixed[start_idx:end], 40; label="Pabs_mixed")
+        else
+            P_err_mixed = NaN
+            P2_err_mixed = NaN
+            P4_err_mixed = NaN
+            P_abs_err_mixed = NaN
+        end
         if pure_block_count > 0
             _, P_err_pure, _, _     = run_reblocking_loop(P_series_pure, 40;     label="P")
             _, P2_err_pure, _, _    = run_reblocking_loop(P2_series_pure, 40;    label="P^2")
@@ -662,11 +687,18 @@ function DMC_pure_pc_overlapping(num_steps::Int, num_walkers::Int, dt::Float64, 
         end
     else
         energy_err = energy_err_unc
-        sample_count = num_steps - equilibration_steps
-        P_err_mixed = std(polarizations_P_mixed[start_idx:end]) / sqrt(sample_count)
-        P2_err_mixed = std(polarizations_P2_mixed[start_idx:end]) / sqrt(sample_count)
-        P4_err_mixed = std(polarizations_P4_mixed[start_idx:end]) / sqrt(sample_count)
-        P_abs_err_mixed = std(polarizations_P_abs_mixed[start_idx:end]) / sqrt(sample_count)
+        if acum_mixed
+            sample_count = num_steps - equilibration_steps
+            P_err_mixed = std(polarizations_P_mixed[start_idx:end]) / sqrt(sample_count)
+            P2_err_mixed = std(polarizations_P2_mixed[start_idx:end]) / sqrt(sample_count)
+            P4_err_mixed = std(polarizations_P4_mixed[start_idx:end]) / sqrt(sample_count)
+            P_abs_err_mixed = std(polarizations_P_abs_mixed[start_idx:end]) / sqrt(sample_count)
+        else
+            P_err_mixed = NaN
+            P2_err_mixed = NaN
+            P4_err_mixed = NaN
+            P_abs_err_mixed = NaN
+        end
     end
 
     #################################################################### print results
@@ -683,15 +715,20 @@ function DMC_pure_pc_overlapping(num_steps::Int, num_walkers::Int, dt::Float64, 
         @printf("<P²>        = %.10f ± %.2e\n", P2_avg_pure, P2_err_pure)
         @printf("<P⁴>        = %.10f ± %.2e\n", P4_avg_pure, P4_err_pure)
         @printf("<|P|>       = %.10f ± %.2e\n", P_abs_avg_pure, P_abs_err_pure)
-        @printf("Mixed <P>   = %.10f ± %.2e\n", P_avg_mixed, P_err_mixed)
-        @printf("Mixed <P²>  = %.10f ± %.2e\n", P2_avg_mixed, P2_err_mixed)
-        @printf("Mixed <P⁴>  = %.10f ± %.2e\n", P4_avg_mixed, P4_err_mixed)
-        @printf("Mixed <|P|> = %.10f ± %.2e\n", P_abs_avg_mixed, P_abs_err_mixed)
+        if acum_mixed
+            @printf("Mixed <P>   = %.10f ± %.2e\n", P_avg_mixed, P_err_mixed)
+            @printf("Mixed <P²>  = %.10f ± %.2e\n", P2_avg_mixed, P2_err_mixed)
+            @printf("Mixed <P⁴>  = %.10f ± %.2e\n", P4_avg_mixed, P4_err_mixed)
+            @printf("Mixed <|P|> = %.10f ± %.2e\n", P_abs_avg_mixed, P_abs_err_mixed)
+        else
+            println("Mixed polarization moments: not accumulated")
+        end
         @printf("Final walkers: %d\n", num_walkers)
         println("=================================================================")
     end
 
     open("results.txt", "w") do f
+        @printf(f, "acum_mixed   %s\n", acum_mixed)
         @printf(f, "E_DMC        %.15f\n", energy_avg)
         @printf(f, "E_DMC_err    %.6e\n",  energy_err)
         @printf(f, "E_sq_avg     %.15f\n", energy_squared_avg)

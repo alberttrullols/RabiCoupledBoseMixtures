@@ -22,6 +22,7 @@ function run_dmc_2comp_forward(N1::Int, N2::Int, g11::Float64, g22::Float64, g12
     forward_walk_steps::Int=200,
     method::String="dmc_pure",
     measurement_stride::Int=1_000,
+    acum_mixed::Bool=true,
     equilibration_steps::Int=0,
     seed::Int=1234)
 
@@ -81,6 +82,7 @@ function run_dmc_2comp_forward(N1::Int, N2::Int, g11::Float64, g22::Float64, g12
         reblocking=reblocking,
         use_full_flip_expression=use_full_flip_expression,
         forward_walk_steps=forward_walk_steps,
+        acum_mixed=acum_mixed,
         equilibration_steps=equilibration_steps,
         seed=seed,
     )
@@ -134,6 +136,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     num_walkers        = parse(Int,     p["num_walkers"])
     time_order         = parse(Int,     p["time_order"])
     measurement_stride = parse(Int, get(p, "measurement_stride", "1000"))
+    acum_mixed         = parse(Bool, get(p, "acum_mixed", "true"))
     equilibration_steps = parse(Int, get(p, "equilibration_steps", "0"))
 
     if method in ("dmc_pure", "dmc_pure_ovlp")
@@ -144,6 +147,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             forward_walk_steps,
             method,
             measurement_stride,
+            acum_mixed,
             equilibration_steps,
             time_order,
         )
