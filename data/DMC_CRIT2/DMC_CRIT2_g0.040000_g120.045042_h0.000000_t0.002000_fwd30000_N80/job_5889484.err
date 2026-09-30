@@ -1,0 +1,3 @@
+Module for EESSI/2025.06 loaded successfully
+[2026-08-12T07:58:48.944] error: _xgetaddrinfo: getaddrinfo(scc-slurmctl-cr-1:6920) failed: Name or service not known
+[2026-08-12T07:58:48.944] error: slurm_set_addr: Unable to resolve "scc-slurmctl-cr-1"
