@@ -11,6 +11,11 @@ ADD_ERRORS = True
 
 NU = 1.0
 BETA = 0.5
+GAMMA = 1.0
+
+# Choose which panels to draw. Any subset of:
+# "binder", "p2", "susceptibility"
+PLOT_QUANTITIES = ("binder", "p2", "susceptibility")
 
 G12C_MIN = 0.0122
 G12C_MAX = 0.0132
@@ -98,6 +103,28 @@ def binder_u4_error(data):
     return hypot(dU_dP2 * p2_err, dU_dP4 * p4_err)
 
 
+def susceptibility_value(data, N):
+    p2 = data.get("P2_avg")
+    pabs = data.get("Pabs_avg")
+    if p2 is None or pabs is None:
+        return None
+    return N * (p2 - pabs**2)
+
+
+def susceptibility_error(data, N):
+    p2 = data.get("P2_avg")
+    pabs = data.get("Pabs_avg")
+    p2_err = data.get("P2_err")
+    pabs_err = data.get("Pabs_err")
+
+    if p2 is None or pabs is None:
+        return None
+    if p2_err is None or pabs_err is None:
+        return None
+
+    return N * hypot(p2_err, 2.0 * pabs * pabs_err)
+
+
 def collect_records():
     records = {}
     for folder in sorted(Path(".").iterdir()):
@@ -125,8 +152,10 @@ def collect_records():
         u4 = binder_u4(data)
         p2 = data.get("P2_avg")
         p2_err = data.get("P2_err")
+        chi = susceptibility_value(data, N)
+        chi_err = susceptibility_error(data, N)
 
-        if u4 is None and p2 is None:
+        if u4 is None and p2 is None and chi is None:
             continue
 
         records.setdefault(N, []).append(
@@ -136,6 +165,8 @@ def collect_records():
                 "u4_err": binder_u4_error(data),
                 "p2": p2,
                 "p2_err": p2_err,
+                "chi": chi,
+                "chi_err": chi_err,
             }
         )
 
@@ -144,7 +175,11 @@ def collect_records():
 
 records = collect_records()
 if not records:
-    raise SystemExit("No usable Binder or P2 data found in this folder.")
+    raise SystemExit("No usable Binder, P2, or susceptibility data found in this folder.")
+
+selected_quantities = [q for q in ("binder", "p2", "susceptibility") if q in PLOT_QUANTITIES]
+if not selected_quantities:
+    raise SystemExit("PLOT_QUANTITIES must contain at least one of: 'binder', 'p2', 'susceptibility'.")
 
 # Scan around a plausible critical coupling estimate and inspect data collapse.
 g12c_values = [
@@ -152,55 +187,85 @@ g12c_values = [
     for i in range(G12C_COUNT)
 ]
 
-fig, axes = plt.subplots(2, len(g12c_values), figsize=(3.4 * len(g12c_values), 7.5), sharex=True)
-if len(g12c_values) == 1:
-    axes = axes.reshape(2, 1)
+fig, axs = plt.subplots(len(selected_quantities), len(g12c_values), figsize=(3.5 * len(g12c_values), 2.8 * len(selected_quantities) + 1.0), sharex=True)
+if len(selected_quantities) == 1 and len(g12c_values) == 1:
+    axes = [[axs]]
+elif len(selected_quantities) == 1:
+    axes = [list(axs)]
+elif len(g12c_values) == 1:
+    axes = [[ax] for ax in axs]
+else:
+    axes = axs
 
-for j, g12c in enumerate(g12c_values):
-    uax = axes[0, j]
-    p2ax = axes[1, j]
+for row_idx, quantity in enumerate(selected_quantities):
+    for col_idx, g12c in enumerate(g12c_values):
+        ax = axes[row_idx][col_idx]
 
-    for N in sorted(records):
-        pts = sorted(records[N], key=lambda d: d["g12"])
+        for N in sorted(records):
+            pts = sorted(records[N], key=lambda d: d["g12"])
+            x = [(d["g12"] - g12c) * (N ** (1.0 / NU)) for d in pts]
 
-        u4_x = [(d["g12"] - g12c) * (N ** (1.0 / NU)) for d in pts if d["u4"] is not None]
-        u4_y = [d["u4"] for d in pts if d["u4"] is not None]
-        u4_yerr = [d["u4_err"] if d["u4_err"] is not None else 0.0 for d in pts if d["u4"] is not None]
+            if quantity == "binder":
+                valid = [d for d in pts if d["u4"] is not None]
+                if not valid:
+                    continue
+                y = [d["u4"] for d in valid]
+                yerr = [d["u4_err"] if d["u4_err"] is not None else 0.0 for d in valid]
+                xvals = [(d["g12"] - g12c) * (N ** (1.0 / NU)) for d in valid]
+                label = f"N={N}" if col_idx == 0 and row_idx == 0 else None
+                if ADD_ERRORS:
+                    ax.errorbar(xvals, y, yerr=yerr, fmt="o-", capsize=2, alpha=0.9, label=label)
+                else:
+                    ax.plot(xvals, y, "o-", alpha=0.9, label=label)
 
-        p2_x = [(d["g12"] - g12c) * (N ** (1.0 / NU)) for d in pts if d["p2"] is not None]
-        p2_y = [d["p2"] * (N ** (2.0 * BETA / NU)) for d in pts if d["p2"] is not None]
-        p2_yerr = [d["p2_err"] if d["p2_err"] is not None else 0.0 for d in pts if d["p2"] is not None]
+            elif quantity == "p2":
+                valid = [d for d in pts if d["p2"] is not None]
+                if not valid:
+                    continue
+                y = [d["p2"] * (N ** (2.0 * BETA / NU)) for d in valid]
+                yerr = [d["p2_err"] if d["p2_err"] is not None else 0.0 for d in valid]
+                xvals = [(d["g12"] - g12c) * (N ** (1.0 / NU)) for d in valid]
+                label = f"N={N}" if col_idx == 0 and row_idx == 0 else None
+                if ADD_ERRORS:
+                    ax.errorbar(xvals, y, yerr=yerr, fmt="o-", capsize=2, alpha=0.9, label=label)
+                else:
+                    ax.plot(xvals, y, "o-", alpha=0.9, label=label)
 
-        if u4_x:
-            label = f"N={N}" if j == 0 else None
-            if ADD_ERRORS:
-                uax.errorbar(u4_x, u4_y, yerr=u4_yerr, fmt="o-", capsize=2, alpha=0.9, label=label)
-            else:
-                uax.plot(u4_x, u4_y, "o-", alpha=0.9, label=label)
+            elif quantity == "susceptibility":
+                valid = [d for d in pts if d["chi"] is not None]
+                if not valid:
+                    continue
+                y = [d["chi"] / (N ** (GAMMA / NU)) for d in valid]
+                yerr = [d["chi_err"] if d["chi_err"] is not None else 0.0 for d in valid]
+                xvals = [(d["g12"] - g12c) * (N ** (1.0 / NU)) for d in valid]
+                label = f"N={N}" if col_idx == 0 and row_idx == 0 else None
+                if ADD_ERRORS:
+                    ax.errorbar(xvals, y, yerr=yerr, fmt="o-", capsize=2, alpha=0.9, label=label)
+                else:
+                    ax.plot(xvals, y, "o-", alpha=0.9, label=label)
 
-        if p2_x:
-            label = f"N={N}" if j == 0 else None
-            if ADD_ERRORS:
-                p2ax.errorbar(p2_x, p2_y, yerr=p2_yerr, fmt="o-", capsize=2, alpha=0.9, label=label)
-            else:
-                p2ax.plot(p2_x, p2_y, "o-", alpha=0.9, label=label)
+        ax.axvline(0.0, color="k", linestyle="--", linewidth=1.0, alpha=0.8)
+        ax.grid(True, linestyle="--", alpha=0.4)
 
-    uax.axvline(0.0, color="k", linestyle="--", linewidth=1.0, alpha=0.8)
-    uax.grid(True, linestyle="--", alpha=0.4)
-    uax.set_ylabel(r"$U_4$")
-    uax.set_title(rf"$g_{{12,c}} = {g12c:.5f}$", fontsize=10)
+        if quantity == "binder":
+            ax.set_ylabel(r"$U_4$")
+        elif quantity == "p2":
+            ax.set_ylabel(r"$P^2 N^{2\beta/\nu}$")
+        elif quantity == "susceptibility":
+            ax.set_ylabel(r"$\chi N^{-\gamma/\nu}$")
 
-    p2ax.axvline(0.0, color="k", linestyle="--", linewidth=1.0, alpha=0.8)
-    p2ax.grid(True, linestyle="--", alpha=0.4)
-    p2ax.set_ylabel(r"$P^2 N^{2\beta/\nu}$")
-    p2ax.set_xlabel(r"$(g_{12}-g_{12,c})N^{1/\nu}$")
+        ax.set_title(rf"$g_{{12,c}} = {g12c:.5f}$", fontsize=10)
 
-    if j == 0:
-        uax.legend(loc="best", fontsize="small")
-        p2ax.legend(loc="best", fontsize="small")
+        if col_idx == 0:
+            handles, labels = ax.get_legend_handles_labels()
+            if labels:
+                ax.legend(loc="best", fontsize="small")
 
-fig.suptitle(rf"Grid scan over $g_{{12,c}}$ for fixed $\nu={NU}$ and $\beta={BETA}$")
+        if row_idx == len(selected_quantities) - 1:
+            ax.set_xlabel(r"$(g_{12}-g_{12,c})N^{1/\nu}$")
+
+fig.suptitle(rf"Grid scan over $g_{{12,c}}$ for fixed $\nu={NU}$, $\beta={BETA}$, and $\gamma={GAMMA}$")
 fig.tight_layout(rect=[0, 0, 1, 0.97])
-out_png = Path("g12c_scan_u4_p2_grid.png")
+out_png = Path("g12c_scan_grid.png")
 fig.savefig(out_png, dpi=200)
 print(f"Saved {out_png}")
