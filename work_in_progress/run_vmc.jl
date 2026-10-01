@@ -42,8 +42,11 @@ function run_vmc_from_params(params::Dict{String, String})
     alpha22 = haskey(params, "alpha22") ? parse(Float64, params["alpha22"]) : alpha_from_a(a22)
     alpha12 = haskey(params, "alpha12") ? parse(Float64, params["alpha12"]) : alpha_from_a(a12)
 
+    @printf("Effective Luttinger parameters: K11 = %.6f (alpha11 = %.6f), K22 = %.6f (alpha22 = %.6f), K12 = %.6f (alpha12 = %.6f)\n",
+        1.0 / alpha11, alpha11, 1.0 / alpha22, alpha22, 1.0 / alpha12, alpha12)
+
     println("Running piecewise trial-wavefunction VMC with alpha-based parameters")
-    return run_metropolis(t, h;
+    return run_metropolis_flips(t, h;
         N1, N2, equilibration_steps, verbose=true,
         alpha11, alpha22, alpha12,
         a11, a22, a12)

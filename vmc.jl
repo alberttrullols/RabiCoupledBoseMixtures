@@ -1,6 +1,9 @@
 if !isdefined(@__MODULE__, :log_psiT)
     include("core_cc.jl")
 end
+if !isdefined(@__MODULE__, :run_reblocking_loop)
+    include("reblocking.jl")
+end
 using Printf
 
 # MC parameters
@@ -242,8 +245,11 @@ function run_metropolis_flips(k11::Float64, delta11::Float64,
     logpsi = log_psiT(x, spin, k11, delta11, k22, delta22, k12, delta12; N_total, L, invL)
 
     E_lap_acc = 0.0
-    E_lap_acc2 = 0.0
     P2_acc = 0.0
+    E_lap_samples = Float64[]
+    P2_samples = Float64[]
+    sizehint!(E_lap_samples, production_steps)
+    sizehint!(P2_samples, production_steps)
     nmeas = 0
     dbg_flips_attempted = 0
     dbg_flips_accepted  = 0
@@ -321,7 +327,7 @@ function run_metropolis_flips(k11::Float64, delta11::Float64,
             end
             E_lap = kinetic + tunnel + field
             E_lap_acc += E_lap
-            E_lap_acc2 += E_lap^2
+            push!(E_lap_samples, E_lap)
             if do_flips
                 n1_count = 0
                 @inbounds for i in 1:N_total
@@ -329,6 +335,7 @@ function run_metropolis_flips(k11::Float64, delta11::Float64,
                 end
                 P = (2 * n1_count - N_total) / N_total
                 P2_acc += P^2
+                push!(P2_samples, P^2)
             end
             nmeas += 1
 
@@ -374,10 +381,14 @@ function run_metropolis_flips(k11::Float64, delta11::Float64,
     end
 
     E_lap_mean = E_lap_acc / nmeas
-    E_lap_var = E_lap_acc2 / nmeas - E_lap_mean^2
-    E_lap_var = max(0.0, E_lap_var)
-    E_lap_err = sqrt(E_lap_var / nmeas)
+    _, E_lap_err, _, _ = run_reblocking_loop(E_lap_samples, 40; label="VMC_flips_energy")
     P2_mean = do_flips ? P2_acc / nmeas : 0.0
+    P2_err = if do_flips
+        _, error, _, _ = run_reblocking_loop(P2_samples, 40; label="VMC_flips_P2")
+        error
+    else
+        0.0
+    end
 
     mkpath("VMC_flips")
     open("VMC_flips/results.txt", "w") do f
@@ -387,6 +398,7 @@ function run_metropolis_flips(k11::Float64, delta11::Float64,
         @printf(f, "E_VMC_err           %.6e\n", E_lap_err)
         @printf(f, "E_VMC_per_particle  %.15f\n", E_lap_mean / N_total)
         @printf(f, "P2                  %.15f\n", P2_mean)
+        @printf(f, "P2_err              %.6e\n", P2_err)
         @printf(f, "equilibration_steps %d\n", equilibration_steps)
         @printf(f, "production_steps    %d\n", production_steps)
     end
