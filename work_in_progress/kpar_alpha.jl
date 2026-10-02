@@ -28,12 +28,3 @@ function print_kpar_alpha(a::Float64)
     @printf("alpha = 1/Kpar = %.12f\n", alpha)
 end
 
-#  Example usage:
-# julia work_in_progress/kpar_alpha.jl
-# if abspath(PROGRAM_FILE) == @__FILE__
-#     # a values to inspect; can be completed or replaced with your desired coupling
-#     for a in [0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
-#         print_kpar_alpha(a)
-#         println("---")
-#     end
-# end

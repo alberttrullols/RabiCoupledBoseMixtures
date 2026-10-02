@@ -50,9 +50,8 @@ function DMCWorkspace_2comp_pure(num_walkers::Int, N_total::Int)
 end
 
 function DMC_pure_pc(num_steps::Int, num_walkers::Int, dt::Float64, E_T_init::Float64,
-    k11_val::Float64, delta11_val::Float64,
-    k22_val::Float64, delta22_val::Float64,
-    k12_val::Float64, delta12_val::Float64,
+    alpha11::Float64, alpha22::Float64, alpha12::Float64,
+    a11::Float64, a22::Float64, a12::Float64,
     t::Float64,
     N1::Int, N2::Int,
     h::Float64;
@@ -181,9 +180,8 @@ function DMC_pure_pc(num_steps::Int, num_walkers::Int, dt::Float64, E_T_init::Fl
             end
             
             # Compute drift and energy at old position (turbo SIMD pass)
-            kin_old, tun_old, field_old = turbo_compute_drift_and_energy!(F_old, logR_acc, xb, spin_buf,
-                k11_val, delta11_val, k22_val, delta22_val, k12_val, delta12_val,
-                t, h; N_total, L, invL)
+            kin_old, tun_old, field_old = turbo_compute_drift_and_energy_piecewise!(F_old, logR_acc, xb, spin_buf,
+                t, h; N_total, L, invL, alpha11, alpha22, alpha12, a11, a22, a12)
             E_old = kin_old + tun_old + field_old
 
             # Propagate walker
@@ -214,9 +212,8 @@ function DMC_pure_pc(num_steps::Int, num_walkers::Int, dt::Float64, E_T_init::Fl
                     end
 
                     # Compute drift at predictor position
-                    turbo_compute_drift_and_energy!(F_new, logR_acc, xb, spin_buf,
-                        k11_val, delta11_val, k22_val, delta22_val, k12_val, delta12_val,
-                        0.0, 0.0; N_total, L, invL)
+                    turbo_compute_drift_and_energy_piecewise!(F_new, logR_acc, xb, spin_buf,
+                        0.0, 0.0; N_total, L, invL, alpha11, alpha22, alpha12, a11, a22, a12)
 
                     # Corrector
                     @inbounds @simd for i in 1:N_total
@@ -234,9 +231,8 @@ function DMC_pure_pc(num_steps::Int, num_walkers::Int, dt::Float64, E_T_init::Fl
             end
 
             # Compute drift and energy at new position
-            kin_new, tun_new, field_new = turbo_compute_drift_and_energy!(F_new, logR_acc, xb, spin_buf,
-                k11_val, delta11_val, k22_val, delta22_val, k12_val, delta12_val,
-                t, h; N_total, L, invL)
+            kin_new, tun_new, field_new = turbo_compute_drift_and_energy_piecewise!(F_new, logR_acc, xb, spin_buf,
+                t, h; N_total, L, invL, alpha11, alpha22, alpha12, a11, a22, a12)
             E_new = kin_new + tun_new + field_new
 
             # single-particle spin flips.
@@ -265,9 +261,8 @@ function DMC_pure_pc(num_steps::Int, num_walkers::Int, dt::Float64, E_T_init::Fl
                     if rand(rng_tid) < p_flip
                         spin_buf[i] = ifelse(spin_buf[i] == 1.0, 2.0, 1.0)
                         # Recompute logR_acc with the updated spin before the next flip
-                        kin_new, tun_new, field_new = turbo_compute_drift_and_energy!(F_new, logR_acc, xb, spin_buf,
-                            k11_val, delta11_val, k22_val, delta22_val, k12_val, delta12_val,
-                            t, h; N_total, L, invL)
+                        kin_new, tun_new, field_new = turbo_compute_drift_and_energy_piecewise!(F_new, logR_acc, xb, spin_buf,
+                            t, h; N_total, L, invL, alpha11, alpha22, alpha12, a11, a22, a12)
                         E_new = kin_new + tun_new + field_new
                     end
                 end
