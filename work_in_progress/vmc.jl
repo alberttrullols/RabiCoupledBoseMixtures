@@ -8,8 +8,8 @@ using Printf
 
 # MC parameters
 const VMC_EQUILIBRATION_STEPS = 20_000
-const VMC_PRODUCTION_STEPS = 150_000
-const step_size = 5.0
+const VMC_PRODUCTION_STEPS = 10_000_000
+const step_size = 3.0
 
 # """
 # Standard Metropolis VMC with fixed N1 and N2 particles.
