@@ -8,7 +8,7 @@ using Printf
 
 # MC parameters
 const VMC_EQUILIBRATION_STEPS = 20_000
-const VMC_PRODUCTION_STEPS = 10_000_000
+const VMC_PRODUCTION_STEPS = 80_000
 const step_size = 3.0
 
 # """
@@ -243,16 +243,16 @@ function run_metropolis_flips(t::Float64,
                        use_spin_flips::Bool=true,
                        debug_flips::Bool=false,
                        debug_stride::Int=100,
-                       equilibration_steps::Int=VMC_EQUILIBRATION_STEPS,
-                       production_steps::Int=VMC_PRODUCTION_STEPS,
+                       vmc_equilibration_steps::Int=20_000,
+                       vmc_production_steps::Int=80_000,
                        alpha11::Float64=0.0, alpha22::Float64=0.0,
                        alpha12::Float64=0.0, a11::Float64=1.0,
                        a22::Float64=1.0, a12::Float64=1.0,
                        save_convergence::Bool=true,
                        convergence_stride::Int=100)
-    equilibration_steps >= 0 || throw(ArgumentError("equilibration_steps must be nonnegative"))
-    production_steps > 0 || throw(ArgumentError("production_steps must be positive"))
-    total_steps = equilibration_steps + production_steps
+    vmc_equilibration_steps >= 0 || throw(ArgumentError("equilibration_steps must be nonnegative"))
+    vmc_production_steps > 0 || throw(ArgumentError("production_steps must be positive"))
+    total_steps = vmc_equilibration_steps + vmc_production_steps
     N_total = N1 + N2
     n = 1.0
     L = N_total / n
@@ -290,7 +290,7 @@ function run_metropolis_flips(t::Float64,
     E_lap_acc2 = 0.0
     P2_acc = 0.0
     P2_samples = Float64[]
-    sizehint!(P2_samples, production_steps)
+    sizehint!(P2_samples, vmc_production_steps)
     nmeas = 0
     dbg_flips_attempted = 0
     dbg_flips_accepted  = 0
@@ -376,7 +376,7 @@ function run_metropolis_flips(t::Float64,
         end
 
         # Measurements after equilibration
-        if step > equilibration_steps
+        if step > vmc_equilibration_steps
             if !energy_fresh
                 kinetic, tunnel, field = turbo_compute_drift_and_energy_piecewise!(F, logR_acc, x, spin,
                             t, h;
@@ -473,8 +473,8 @@ function run_metropolis_flips(t::Float64,
         @printf(f, "E_VMC_per_particle  %.15f\n", E_lap_mean / N_total)
         @printf(f, "P2                  %.15f\n", P2_mean)
         @printf(f, "P2_err              %.6e\n", P2_err)
-        @printf(f, "equilibration_steps %d\n", equilibration_steps)
-        @printf(f, "production_steps    %d\n", production_steps)
+        @printf(f, "vmc_equilibration_steps %d\n", vmc_equilibration_steps)
+        @printf(f, "vmc_production_steps    %d\n", vmc_production_steps)
         @printf(f, "pos_acceptance_rate  %.6f\n", pos_acceptance_rate)
         @printf(f, "flip_acceptance_rate %.6f\n", flip_acceptance_rate)
     end
@@ -523,7 +523,7 @@ function run_metropolis_flips(t::Float64,
 
     if verbose
         println("VMC result (unified spin-based):")
-        println("Energy (via Laplacian) = ", E_lap_mean/L, " ± ", E_lap_err/L)
+        println("Energy (via Laplacian) = ", E_lap_mean/N_total, " ± ", E_lap_err/N_total)
         if do_flips
             println("<P²>                  = ", P2_mean)
         end
