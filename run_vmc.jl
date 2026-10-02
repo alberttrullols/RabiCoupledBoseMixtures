@@ -26,7 +26,9 @@ function run_vmc_from_params(params::Dict{String, String})
     g12 = parse(Float64, params["g12"])
     t = parse(Float64, params["t"])
     h = parse(Float64, params["h"])
-    equilibration_steps = parse(Int, get(params, "equilibration_steps", string(VMC_EQUILIBRATION_STEPS)))
+    
+    equilibration_steps = parse(Int, get(params, "vmc_equilibration_steps", string(VMC_EQUILIBRATION_STEPS)))
+    production_steps = parse(Int, get(params, "vmc_production_steps", string(VMC_PRODUCTION_STEPS)))
 
     N_total = N1 + N2
     L = Float64(N_total)
@@ -39,7 +41,7 @@ function run_vmc_from_params(params::Dict{String, String})
 
     println("Running VMC only with parameters from params.dat")
     return run_metropolis_flips(k11, delta11, k22, delta22, k12, delta12, t, h;
-        N1, N2, equilibration_steps, verbose=true)
+        N1, N2, vmc_equilibration_steps=equilibration_steps, vmc_production_steps=production_steps, verbose=true)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
